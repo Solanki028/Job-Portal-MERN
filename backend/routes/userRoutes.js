@@ -12,3 +12,11 @@ router.route("/profile/update").post(isAuthenticated,singleUpload,updateProfile)
 
 export default router;
 
+console.log("Register route hit");
+router.route("/register").post(singleUpload,register);
+console.log("Login route hit");
+router.route("/login").post(login);
+console.log("Logout route hit");
+router.route("/logout").get(logout);
+console.log("Profile update route hit");
+router.route("/profile/update").post(isAuthenticated,singleUpload,updateProfile);

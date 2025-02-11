@@ -2,27 +2,26 @@ import { User } from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import getDataUri from "../utils/datauri.js";
-import cloudinary from "cloudinary";
+import { v2 as cloudinary } from 'cloudinary';
+import dotenv from "dotenv";
+dotenv.config();
 
 // ✅ Correct Cloudinary Configuration
- 
 
-cloudinary.v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "dsoeem7bp",
-    api_key: process.env.CLOUDINARY_API_KEY || "865115572852146",
-    api_secret: process.env.CLOUDINARY_API_SECRET || "Cvyi22TWIfjvcClv7UUJf"
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    secure: true,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-console.log("Signature Test:", cloudinary.v2.utils.api_sign_request(
-    { timestamp: Math.floor(Date.now() / 1000) },
-    process.env.CLOUDINARY_API_SECRET
-));
 
 // 🔹 Register Function
 export const register = async (req, res) => {
     try {
-        console.log("📌 Request Body:", req.body);
-        console.log("📌 Request File:", req.file);
+        // console.log("📌 Request Body:", req.body);
+        // console.log("📌 Request File:", req.file);
 
         const { fullname, email, phoneNumber, password, role } = req.body;
 
@@ -42,24 +41,25 @@ export const register = async (req, res) => {
             return res.status(400).json({ message: "Failed to process the uploaded file.", success: false });
         }
 
-        console.log("📌 Generated Data URI:", fileUri.content.substring(0, 100) + "...");
+        // console.log("📌 Generated Data URI:", fileUri.content.substring(0, 100) + "...");
 
-        // ✅ Upload to Cloudinary
-        let cloudResponse;
-        try {
-            cloudResponse = await cloudinary.v2.uploader.upload(fileUri.content, {
+        const cloudResponse = await cloudinary.uploader
+            .upload(
+                fileUri.content, {
                 resource_type: "image",
                 folder: "user_profiles", // ✅ Ensure folder name is correct
                 use_filename: true,
                 unique_filename: false,
                 overwrite: true,
+            }
+            )
+            .catch((error) => {
+                console.error("❌ Cloudinary Upload Error:", error);
+                return res.status(500).json({ message: "Failed to upload file to Cloudinary.", success: false });
             });
 
-            console.log("✅ Cloudinary Upload Success:", cloudResponse.secure_url);
-        } catch (error) {
-            console.error("❌ Cloudinary Upload Error:", error);
-            return res.status(500).json({ message: "Failed to upload file to Cloudinary.", success: false });
-        }
+        // console.log("cloudResponse: ",cloudResponse);
+
 
         // ✅ Check if user already exists
         const existingUser = await User.findOne({ email });
@@ -93,12 +93,12 @@ export const register = async (req, res) => {
 };
 
 
-    
+
 
 export const login = async (req, res) => {
     try {
         const { email, password, role } = req.body;
-        
+
         if (!email || !password || !role) {
             return res.status(400).json({
                 message: "Something is missing",
@@ -106,6 +106,7 @@ export const login = async (req, res) => {
             });
         };
         let user = await User.findOne({ email });
+
         if (!user) {
             return res.status(400).json({
                 message: "Incorrect email or password.",
@@ -113,6 +114,8 @@ export const login = async (req, res) => {
             })
         }
         const isPasswordMatch = await bcrypt.compare(password, user.password);
+        console.log("after password the login", isPasswordMatch);
+
         if (!isPasswordMatch) {
             return res.status(400).json({
                 message: "Incorrect email or password.",
@@ -132,6 +135,7 @@ export const login = async (req, res) => {
         }
         const token = await jwt.sign(tokenData, process.env.SECRET_KEY, { expiresIn: '1d' });
 
+
         user = {
             _id: user._id,
             fullname: user.fullname,
@@ -142,12 +146,12 @@ export const login = async (req, res) => {
         }
 
         return res.status(200).cookie("token", token, { maxAge: 1 * 24 * 60 * 60 * 1000, httpsOnly: true, sameSite: 'strict' }).json({
-            message: `Welcome back ${user.fullname}`,
+            message: `Welcome back ${ user.fullname }`,
             user,
             success: true
         })
     } catch (error) {
-        console.log(error);
+        console.log("Line 150: ".error);
     }
 }
 export const logout = async (req, res) => {
@@ -157,22 +161,22 @@ export const logout = async (req, res) => {
             success: true
         })
     } catch (error) {
-        console.log(error);
+        console.log("from line 160: ", error);
     }
 }
 export const updateProfile = async (req, res) => {
     try {
         const { fullname, email, phoneNumber, bio, skills } = req.body;
-        
+
         const file = req.file;
-        
+
         const fileUri = getDataUri(file);
         const cloudResponse = await cloudinary.uploader.upload(fileUri.content);
 
 
 
         let skillsArray;
-        if(skills){
+        if (skills) {
             skillsArray = skills.split(",");
         }
         const userId = req.id; // middleware authentication
@@ -185,14 +189,14 @@ export const updateProfile = async (req, res) => {
             })
         }
         // updating data
-        if(fullname) user.fullname = fullname
-        if(email) user.email = email
-        if(phoneNumber)  user.phoneNumber = phoneNumber
-        if(bio) user.profile.bio = bio
-        if(skills) user.profile.skills = skillsArray
-      
+        if (fullname) user.fullname = fullname
+        if (email) user.email = email
+        if (phoneNumber) user.phoneNumber = phoneNumber
+        if (bio) user.profile.bio = bio
+        if (skills) user.profile.skills = skillsArray
+
         // resume comes later here...
-        if(cloudResponse){
+        if (cloudResponse) {
             user.profile.resume = cloudResponse.secure_url // save the cloudinary url
             user.profile.resumeOriginalName = file.originalname // Save the original file name
         }
@@ -210,9 +214,9 @@ export const updateProfile = async (req, res) => {
         }
 
         return res.status(200).json({
-            message:"Profile updated successfully.",
+            message: "Profile updated successfully.",
             user,
-            success:true
+            success: true
         })
     } catch (error) {
         console.log(error);
